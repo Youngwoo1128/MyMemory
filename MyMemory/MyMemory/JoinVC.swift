@@ -13,6 +13,7 @@ class JoinVC : UIViewController, UITableViewDataSource, UITableViewDelegate, UIN
     
     @IBOutlet weak var profile: UIImageView!
     @IBOutlet weak var tableView: UITableView!
+    @IBOutlet weak var indicatorView: UIActivityIndicatorView!
     
     var fieldAccount: UITextField!
     var fieldPassworld: UITextField!
@@ -30,6 +31,7 @@ class JoinVC : UIViewController, UITableViewDataSource, UITableViewDelegate, UIN
         
         let gesture = UITapGestureRecognizer(target: self, action: #selector(tappedProfile(_:)))
         self.profile.addGestureRecognizer(gesture)
+        self.view.bringSubviewToFront(self.indicatorView)
     }
     
     @objc
@@ -64,6 +66,12 @@ class JoinVC : UIViewController, UITableViewDataSource, UITableViewDelegate, UIN
         }
     }
    
+    func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
+        if let image = info[UIImagePickerController.InfoKey.originalImage] as? UIImage{
+            self.profile.image = image
+        }
+        self.dismiss(animated: true)
+    }
     
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
         return 3
@@ -73,7 +81,7 @@ class JoinVC : UIViewController, UITableViewDataSource, UITableViewDelegate, UIN
         
         let cell = tableView.dequeueReusableCell(withIdentifier: "cell")!
         
-        let tfFrame = CGRect(x: 20, y: 0, width: cell.bounds.width-20, height: 37)
+        let tfFrame = CGRect(x: 20, y: 0, width: cell.bounds.width - 20, height: 37)
         
         switch indexPath.row {
         case 0:
@@ -105,12 +113,66 @@ class JoinVC : UIViewController, UITableViewDataSource, UITableViewDelegate, UIN
     }
     
     func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {
-        return 40
+        return 30
     }
     
    
     
     @IBAction func submit(_ sender: Any) {
         
+        self.indicatorView.startAnimating()
+        
+        // 1. 전달할 값 준비
+        // 1-1. 이미지를 Base64  인코딩 처리
+        let profile = self.profile.image!.pngData()?.base64EncodedString()
+        
+        let param : Parameters = [
+            "account"   : self.fieldAccount.text!,
+            "password"  : self.fieldName.text!,
+            "name"      : self.fieldName.text!,
+            "profile_image" : profile!
+        ]
+        
+        // 2. API 호출
+        let url = "http://swiftapi.rubypaper.co.kr:2029/userAccount/join"
+        let cell = Alamofire.request(url, method: .post, parameters: param, encoding: JSONEncoding.default)
+        
+        // 3. 서버 응답값 처리
+        cell.responseJSON{ res in
+            
+            self.indicatorView.stopAnimating()
+            
+            // 3-1. JSON 형식으로 값이 제대로 전달되었는지 확인
+            guard let jsonObject = res.result.value as? [String : Any] else {
+                self.alert(_message: "서버 호출 과정에서 오류가 발생했습니다.")
+                return
+            }
+            
+            // 3-2. 응답 코드 확인, 0이면 성공
+            let resultCode = jsonObject["result_code"] as! Int
+            if resultCode == 0{
+                self.alert(_message: "가입이 완료되었습니다.")
+            }else {
+                let errorMsg = jsonObject["error_msg"] as! String
+                self.alert(_message: "오류발생 : \(errorMsg)")
+            }
+        }
+    }
+}
+
+extension JoinVC{
+    func alert(_message: String, completion: (()->Void)? = nil){
+        
+        // 메인 스레드에서 실행
+        DispatchQueue.main.async {
+            let alert = UIAlertController(title: nil, message: _message, preferredStyle: .alert)
+            
+            let okAction = UIAlertAction(title: "확인", style: .cancel) { (_) in
+                completion?()
+                
+            }
+            alert.addAction(okAction)
+            self.present(alert, animated: false)
+        }
     }
 }
